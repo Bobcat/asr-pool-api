@@ -122,6 +122,7 @@ class ASRRequestStatus:
   started_at_utc: str | None = None
   finished_at_utc: str | None = None
   stage_started_at_utc: str | None = None
+  timings: dict[str, float] = field(default_factory=dict)
   retryable: bool | None = None
   response: dict[str, Any] | None = None
   error: ASRErrorInfo | None = None
@@ -145,6 +146,7 @@ class ASRRequestStatus:
       "started_at_utc": self.started_at_utc,
       "finished_at_utc": self.finished_at_utc,
       "stage_started_at_utc": self.stage_started_at_utc,
+      "timings": dict(self.timings or {}),
       "retryable": self.retryable,
       "response": (dict(self.response) if isinstance(self.response, dict) else self.response),
       "error": (self.error.to_dict() if self.error is not None else None),

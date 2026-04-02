@@ -31,6 +31,28 @@ def _clean_int(value: Any) -> int | None:
     return None
 
 
+def _clean_float(value: Any) -> float | None:
+  if value is None:
+    return None
+  try:
+    return float(value)
+  except Exception:
+    return None
+
+
+def _clean_timings(payload: Any) -> dict[str, float]:
+  out: dict[str, float] = {}
+  for raw_key, raw_value in dict(payload or {}).items():
+    key = _clean_text(raw_key)
+    if not key:
+      continue
+    sec = _clean_float(raw_value)
+    if sec is None:
+      continue
+    out[key] = max(0.0, float(sec))
+  return out
+
+
 def build_submit_request_payload(request: ASRSubmitRequest) -> tuple[dict[str, Any], Path]:
   request_id = _clean_text(request.request_id)
   if not request_id:
@@ -163,6 +185,7 @@ def request_status_from_payload(
     started_at_utc=(_clean_text(body.get("started_at_utc")) or None),
     finished_at_utc=(_clean_text(body.get("finished_at_utc")) or None),
     stage_started_at_utc=(_clean_text(body.get("stage_started_at_utc")) or None),
+    timings=_clean_timings(body.get("timings")),
     retryable=body.get("retryable"),
     response=(dict(body.get("response") or {}) if isinstance(body.get("response"), dict) else None),
     error=error,
