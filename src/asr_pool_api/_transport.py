@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import random
 import threading
@@ -13,6 +14,8 @@ from urllib import parse as urlparse
 from urllib import request as urlrequest
 
 from .models import ASRPoolClientConfig
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class MultipartBuildError(RuntimeError):
@@ -358,9 +361,11 @@ def iter_completion_events(
         retry_index = 0
         event_name = "message"
         data_lines: list[str] = []
+        stream_ended_unexpectedly = False
         while not stop_event.is_set():
           raw_line = resp.readline()
           if not raw_line:
+            stream_ended_unexpectedly = True
             break
           try:
             line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
@@ -388,8 +393,6 @@ def iter_completion_events(
               if feed_changed:
                 current_since_seq = 0
                 break
-              if next_seq_raw is not None:
-                current_since_seq = max(current_since_seq, next_seq)
             elif kind == "completion":
               seq = max(0, int(payload.get("seq") or 0))
               if seq > 0:
@@ -410,7 +413,23 @@ def iter_completion_events(
           if line.startswith("data:"):
             data_lines.append(str(line[5:]).lstrip())
             continue
-    except Exception:
+        if stream_ended_unexpectedly and not stop_event.is_set():
+          sleep_s = _backoff_sleep_s(
+            retry_index=retry_index,
+            base_s=cfg.retry_base_delay_s,
+            max_s=cfg.retry_max_delay_s,
+            jitter_s=cfg.retry_jitter_s,
+          )
+          retry_index += 1
+          _LOGGER.warning(
+            "asr_pool_api completions stream ended unexpectedly consumer_id=%s since_seq=%s retry_in_s=%.2f",
+            cid,
+            int(current_since_seq),
+            float(sleep_s),
+          )
+          if sleep_s > 0.0 and not stop_event.is_set():
+            stop_event.wait(timeout=float(sleep_s))
+    except Exception as e:
       if stop_event.is_set():
         break
       sleep_s = _backoff_sleep_s(
@@ -420,5 +439,13 @@ def iter_completion_events(
         jitter_s=cfg.retry_jitter_s,
       )
       retry_index += 1
+      _LOGGER.warning(
+        "asr_pool_api completions stream I/O failure consumer_id=%s since_seq=%s retry_in_s=%.2f exc=%s: %s",
+        cid,
+        int(current_since_seq),
+        float(sleep_s),
+        type(e).__name__,
+        e,
+      )
       if sleep_s > 0.0 and not stop_event.is_set():
         stop_event.wait(timeout=float(sleep_s))

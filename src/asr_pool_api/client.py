@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import threading
 from typing import Iterator
@@ -18,6 +19,8 @@ from .models import (
   ASRRequestStatus,
   ASRSubmitRequest,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ASRPoolClient:
@@ -159,23 +162,58 @@ class ASRPoolClient:
         details={},
       )
     active_stop = stop_event if stop_event is not None else threading.Event()
+    last_since_seq = max(0, int(since_seq))
     try:
       for kind, payload in _transport.iter_completion_events(
         config=self._config,
         consumer_id=cid,
-        since_seq=since_seq,
+        since_seq=last_since_seq,
         stop_event=active_stop,
       ):
         if kind == "completion":
-          yield _codec.completion_event_from_payload(payload)
+          try:
+            event = _codec.completion_event_from_payload(payload)
+          except Exception as e:
+            seq = None
+            try:
+              seq = int(dict(payload or {}).get("seq") or 0)
+            except Exception:
+              seq = None
+            _LOGGER.warning(
+              "asr_pool_api skipped malformed completion payload consumer_id=%s seq=%s exc=%s: %s",
+              cid,
+              seq,
+              type(e).__name__,
+              e,
+            )
+            if seq is not None and seq > 0:
+              last_since_seq = max(last_since_seq, int(seq) + 1)
+            continue
+          last_since_seq = max(last_since_seq, int(event.seq) + 1)
+          yield event
         elif kind == "feed_reset":
-          yield _codec.feed_reset_from_payload(payload)
+          try:
+            event = _codec.feed_reset_from_payload(payload)
+          except Exception as e:
+            _LOGGER.warning(
+              "asr_pool_api skipped malformed feed_reset payload consumer_id=%s exc=%s: %s",
+              cid,
+              type(e).__name__,
+              e,
+            )
+            continue
+          last_since_seq = 0
+          yield event
     except Exception as e:
       raise ASRPoolTransportError(
         code="ASR_COMPLETIONS_STREAM_IO_FAILURE",
         message=f"{type(e).__name__}: {e}",
         retryable=True,
-        details={"pool_base_url": self._config.base_url, "exc_type": type(e).__name__},
+        details={
+          "pool_base_url": self._config.base_url,
+          "exc_type": type(e).__name__,
+          "since_seq": int(last_since_seq),
+        },
       ) from e
 
   def download_srt(

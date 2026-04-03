@@ -66,6 +66,25 @@ class ClientTests(unittest.TestCase):
     self.assertEqual(rows[0].old_feed_id, "old")
     self.assertEqual(rows[0].new_feed_id, "new")
 
+  def test_iter_completions_skips_malformed_completion_and_continues(self) -> None:
+    client = ASRPoolClient(ASRPoolClientConfig(base_url="http://pool.test"))
+
+    def _iter_completion_events(**_kwargs):
+      yield "completion", {"seq": {}}
+      yield "completion", {
+        "seq": 12,
+        "ts_utc": "2026-04-03T08:00:00Z",
+        "request_id": "req-12",
+        "consumer_id": "consumer-a",
+        "state": "completed",
+      }
+
+    with mock.patch("asr_pool_api._transport.iter_completion_events", _iter_completion_events):
+      rows = list(client.iter_completions(consumer_id="consumer-a", stop_event=threading.Event()))
+    self.assertEqual(len(rows), 1)
+    self.assertEqual(rows[0].seq, 12)
+    self.assertEqual(rows[0].status.request_id, "req-12")
+
 
 if __name__ == "__main__":
   unittest.main()
