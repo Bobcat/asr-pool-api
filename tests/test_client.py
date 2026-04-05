@@ -70,7 +70,7 @@ class ClientTests(unittest.TestCase):
     client = ASRPoolClient(ASRPoolClientConfig(base_url="http://pool.test"))
 
     def _iter_completion_events(**_kwargs):
-      yield "completion", {"seq": {}}
+      yield "completion", {"seq": {"bad": 1}}
       yield "completion", {
         "seq": 12,
         "ts_utc": "2026-04-03T08:00:00Z",
@@ -84,6 +84,25 @@ class ClientTests(unittest.TestCase):
     self.assertEqual(len(rows), 1)
     self.assertEqual(rows[0].seq, 12)
     self.assertEqual(rows[0].status.request_id, "req-12")
+
+  def test_iter_completions_transport_error_uses_last_seen_seq_in_details(self) -> None:
+    client = ASRPoolClient(ASRPoolClientConfig(base_url="http://pool.test"))
+
+    def _iter_completion_events(**_kwargs):
+      yield "completion", {
+        "seq": 12,
+        "ts_utc": "2026-04-03T08:00:00Z",
+        "request_id": "req-12",
+        "consumer_id": "consumer-a",
+        "state": "completed",
+      }
+      raise RuntimeError("stream broke")
+
+    with mock.patch("asr_pool_api._transport.iter_completion_events", _iter_completion_events):
+      with self.assertRaises(Exception) as ctx:
+        list(client.iter_completions(consumer_id="consumer-a", stop_event=threading.Event()))
+    exc = ctx.exception
+    self.assertEqual(getattr(exc, "details", {}).get("since_seq"), 12)
 
 
 if __name__ == "__main__":

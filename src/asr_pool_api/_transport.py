@@ -396,7 +396,7 @@ def iter_completion_events(
             elif kind == "completion":
               seq = max(0, int(payload.get("seq") or 0))
               if seq > 0:
-                current_since_seq = max(current_since_seq, seq + 1)
+                current_since_seq = max(current_since_seq, seq)
               yield "completion", dict(payload)
             elif kind == "heartbeat":
               next_seq = max(0, int(payload.get("next_seq") or current_since_seq))

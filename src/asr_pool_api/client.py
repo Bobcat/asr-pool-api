@@ -187,9 +187,9 @@ class ASRPoolClient:
               e,
             )
             if seq is not None and seq > 0:
-              last_since_seq = max(last_since_seq, int(seq) + 1)
+              last_since_seq = max(last_since_seq, int(seq))
             continue
-          last_since_seq = max(last_since_seq, int(event.seq) + 1)
+          last_since_seq = max(last_since_seq, int(event.seq))
           yield event
         elif kind == "feed_reset":
           try:
