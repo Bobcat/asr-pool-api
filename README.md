@@ -166,3 +166,7 @@ All inherit from `ASRPoolError` and expose:
 
 This lets callers make clear distinctions between local validation failures,
 remote request rejection, transport failures, and artifact download failures.
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
