@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import mimetypes
@@ -40,6 +41,107 @@ class RemoteRequestError(RuntimeError):
     super().__init__(f"{self.code}: {self.message}")
 
 
+class PersistentHTTPTransport:
+  def __init__(self) -> None:
+    self._lock = threading.Lock()
+    self._conn: http.client.HTTPConnection | http.client.HTTPSConnection | None = None
+    self._origin: tuple[str, str, int | None] | None = None
+
+  def close(self) -> None:
+    with self._lock:
+      self._close_locked()
+
+  def _close_locked(self) -> None:
+    conn = self._conn
+    self._conn = None
+    self._origin = None
+    if conn is not None:
+      try:
+        conn.close()
+      except Exception:
+        pass
+
+  def _connection_locked(
+    self,
+    *,
+    scheme: str,
+    host: str,
+    port: int | None,
+    timeout_s: float,
+  ) -> http.client.HTTPConnection | http.client.HTTPSConnection:
+    origin = (str(scheme), str(host), port)
+    if self._conn is not None and self._origin == origin:
+      self._conn.timeout = float(timeout_s)
+      return self._conn
+    self._close_locked()
+    if scheme == "https":
+      conn: http.client.HTTPConnection | http.client.HTTPSConnection = http.client.HTTPSConnection(
+        host,
+        port=port,
+        timeout=float(timeout_s),
+      )
+    else:
+      conn = http.client.HTTPConnection(
+        host,
+        port=port,
+        timeout=float(timeout_s),
+      )
+    self._conn = conn
+    self._origin = origin
+    return conn
+
+  def request_json(
+    self,
+    *,
+    method: str,
+    url: str,
+    token: str,
+    timeout_s: float,
+    body_bytes: bytes | None = None,
+    content_type: str | None = None,
+    accept: str | None = None,
+  ) -> tuple[int, dict[str, Any]]:
+    parsed = urlparse.urlparse(str(url))
+    scheme = str(parsed.scheme or "").lower()
+    if scheme not in {"http", "https"}:
+      raise ValueError(f"unsupported HTTP scheme: {scheme or '<empty>'}")
+    host = str(parsed.hostname or "").strip()
+    if not host:
+      raise ValueError("HTTP URL host is required")
+    request_target = urlparse.urlunparse(("", "", parsed.path or "/", parsed.params, parsed.query, ""))
+    headers: dict[str, str] = {}
+    if content_type:
+      headers["Content-Type"] = str(content_type)
+    if accept:
+      headers["Accept"] = str(accept)
+    if token:
+      headers["X-ASR-Token"] = str(token)
+    try:
+      with self._lock:
+        conn = self._connection_locked(
+          scheme=scheme,
+          host=host,
+          port=parsed.port,
+          timeout_s=float(timeout_s),
+        )
+        conn.request(
+          str(method).upper(),
+          request_target,
+          body=(bytes(body_bytes) if body_bytes is not None else None),
+          headers=headers,
+        )
+        resp = conn.getresponse()
+        raw = bytes(resp.read() or b"")
+        status_code = int(getattr(resp, "status", 200) or 200)
+        if bool(getattr(resp, "will_close", False)) or str(resp.getheader("Connection", "")).lower() == "close":
+          self._close_locked()
+        return status_code, _json_or_empty(raw)
+    except Exception:
+      with self._lock:
+        self._close_locked()
+      raise
+
+
 def _json_or_empty(raw: bytes) -> dict[str, Any]:
   if not raw:
     return {}
@@ -59,7 +161,18 @@ def _http_request_once(
   body_bytes: bytes | None = None,
   content_type: str | None = None,
   accept: str | None = None,
+  transport: PersistentHTTPTransport | None = None,
 ) -> tuple[int, dict[str, Any]]:
+  if transport is not None:
+    return transport.request_json(
+      method=method,
+      url=url,
+      token=token,
+      timeout_s=timeout_s,
+      body_bytes=body_bytes,
+      content_type=content_type,
+      accept=accept,
+    )
   req = urlrequest.Request(
     url,
     data=(bytes(body_bytes) if body_bytes is not None else None),
@@ -100,6 +213,7 @@ def _http_request_with_retry(
   body_bytes: bytes | None = None,
   content_type: str | None = None,
   accept: str | None = None,
+  transport: PersistentHTTPTransport | None = None,
 ) -> tuple[int, dict[str, Any], int]:
   cfg = config.normalized()
   max_attempts = max(1, int(cfg.retry_attempts))
@@ -114,6 +228,7 @@ def _http_request_with_retry(
         body_bytes=body_bytes,
         content_type=content_type,
         accept=accept,
+        transport=transport,
       )
     except Exception as e:
       last_exc = e
@@ -181,6 +296,7 @@ def submit_multipart_request(
   config: ASRPoolClientConfig,
   request_payload: dict[str, Any],
   audio_path: Path,
+  transport: PersistentHTTPTransport | None = None,
 ) -> tuple[int, dict[str, Any], int]:
   cfg = config.normalized()
   submit_url = urlparse.urljoin(cfg.base_url + "/", "asr/v1/requests")
@@ -197,6 +313,7 @@ def submit_multipart_request(
     url=submit_url,
     body_bytes=body_bytes,
     content_type=content_type,
+    transport=transport,
   )
 
 

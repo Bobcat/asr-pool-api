@@ -26,10 +26,21 @@ _LOGGER = logging.getLogger(__name__)
 class ASRPoolClient:
   def __init__(self, config: ASRPoolClientConfig) -> None:
     self._config = config.normalized()
+    self._submit_transport = _transport.PersistentHTTPTransport()
 
   @property
   def config(self) -> ASRPoolClientConfig:
     return self._config
+
+  def close(self) -> None:
+    self._submit_transport.close()
+
+  def __enter__(self) -> "ASRPoolClient":
+    return self
+
+  def __exit__(self, exc_type, exc, tb) -> bool:
+    self.close()
+    return False
 
   def submit_audio(self, request: ASRSubmitRequest) -> ASRRequestStatus:
     try:
@@ -54,6 +65,7 @@ class ASRPoolClient:
         config=self._config,
         request_payload=payload,
         audio_path=audio_path,
+        transport=self._submit_transport,
       )
     except _transport.MultipartBuildError as e:
       cause = e.__cause__
