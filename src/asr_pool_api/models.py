@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 ASRRequestState = Literal["queued", "running", "completed", "failed", "cancel_requested", "cancelled", "unknown"]
-ASRPriority = Literal["interactive", "normal", "background"]
+ASRPriority = Literal["interactive", "normal"]
 ASRSpeakerMode = Literal["none", "auto", "fixed"]
 
 
@@ -55,7 +55,6 @@ class ASRAudioFile:
 @dataclass(frozen=True)
 class ASRRequestRouting:
   fairness_key: str = ""
-  slot_affinity: int | None = None
 
 
 @dataclass(frozen=True)
@@ -85,7 +84,7 @@ class ASRSubmitRequest:
   request_id: str
   consumer_id: str
   audio: ASRAudioFile
-  priority: ASRPriority = "background"
+  priority: ASRPriority = "normal"
   routing: ASRRequestRouting = field(default_factory=ASRRequestRouting)
   options: ASRRequestOptions = field(default_factory=ASRRequestOptions)
   outputs: ASROutputSelection = field(default_factory=ASROutputSelection)
@@ -116,8 +115,6 @@ class ASRRequestStatus:
   stage: str | None = None
   queue_position: int | None = None
   fairness_key: str = ""
-  slot_affinity_requested: int | None = None
-  slot_affinity_effective: int | None = None
   submitted_at_utc: str | None = None
   started_at_utc: str | None = None
   finished_at_utc: str | None = None
@@ -140,8 +137,6 @@ class ASRRequestStatus:
       "stage": self.stage,
       "queue_position": self.queue_position,
       "fairness_key": str(self.fairness_key),
-      "slot_affinity_requested": self.slot_affinity_requested,
-      "slot_affinity_effective": self.slot_affinity_effective,
       "submitted_at_utc": self.submitted_at_utc,
       "started_at_utc": self.started_at_utc,
       "finished_at_utc": self.finished_at_utc,

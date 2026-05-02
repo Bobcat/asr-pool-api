@@ -121,6 +121,10 @@ It combines:
 - ASR options: `ASRRequestOptions`
 - desired outputs: `ASROutputSelection`
 
+`priority` defaults to `normal`; set it to `interactive` for latency-sensitive
+work. `ASRRequestRouting` carries `fairness_key` for interactive fairness.
+Clients do not choose pool runner slots.
+
 This keeps consumer code at the domain level instead of manipulating the pool's
 wire format directly.
 

@@ -29,7 +29,7 @@ class CodecTests(unittest.TestCase):
           sample_rate_hz=16000,
           channels=1,
         ),
-        routing=ASRRequestRouting(fairness_key="sess-1", slot_affinity=0),
+        routing=ASRRequestRouting(fairness_key="sess-1"),
         options=ASRRequestOptions(language="nl", align_enabled=True, diarize_enabled=False),
         outputs=ASROutputSelection(srt=True),
       )
@@ -40,8 +40,8 @@ class CodecTests(unittest.TestCase):
       self.assertEqual(payload["schema_version"], "asr_v2")
       self.assertEqual(payload["request_id"], "req-1")
       self.assertEqual(payload["consumer_id"], "consumer-a")
+      self.assertEqual(payload["priority"], "normal")
       self.assertEqual(payload["routing"]["fairness_key"], "sess-1")
-      self.assertEqual(payload["routing"]["slot_affinity"], 0)
       self.assertEqual(payload["audio"]["duration_ms"], 1234)
       self.assertEqual(payload["outputs"]["srt"], True)
       self.assertEqual(payload["options"]["language"], "nl")

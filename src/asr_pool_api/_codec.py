@@ -10,7 +10,6 @@ from .models import (
   ASRErrorInfo,
   ASROutputSelection,
   ASRRequestOptions,
-  ASRRequestRouting,
   ASRRequestStatus,
   ASRSubmitRequest,
 )
@@ -72,7 +71,7 @@ def build_submit_request_payload(request: ASRSubmitRequest) -> tuple[dict[str, A
     "schema_version": _SCHEMA_VERSION,
     "request_id": request_id,
     "consumer_id": consumer_id,
-    "priority": _clean_text(request.priority) or "background",
+    "priority": _clean_text(request.priority) or "normal",
     "audio": {
       "local_path": str(audio_path),
       "format": audio_format,
@@ -96,8 +95,6 @@ def build_submit_request_payload(request: ASRSubmitRequest) -> tuple[dict[str, A
   fairness_key = _clean_text(request.routing.fairness_key)
   if fairness_key:
     routing["fairness_key"] = fairness_key
-  if request.routing.slot_affinity is not None:
-    routing["slot_affinity"] = int(request.routing.slot_affinity)
   if routing:
     payload["routing"] = routing
 
@@ -179,8 +176,6 @@ def request_status_from_payload(
     stage=(_clean_text(body.get("stage")) or None),
     queue_position=_clean_int(body.get("queue_position")),
     fairness_key=_clean_text(body.get("fairness_key")),
-    slot_affinity_requested=_clean_int(body.get("slot_affinity_requested")),
-    slot_affinity_effective=_clean_int(body.get("slot_affinity_effective")),
     submitted_at_utc=(_clean_text(body.get("submitted_at_utc")) or None),
     started_at_utc=(_clean_text(body.get("started_at_utc")) or None),
     finished_at_utc=(_clean_text(body.get("finished_at_utc")) or None),
