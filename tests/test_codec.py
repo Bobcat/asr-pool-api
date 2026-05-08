@@ -68,6 +68,55 @@ class CodecTests(unittest.TestCase):
     self.assertEqual(status.error.code, "ASR_FAIL")
     self.assertEqual(status.error.details["slot"], 1)
 
+  def test_build_submit_request_payload_serializes_fw_options_and_json_outputs(self) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+      audio_path = Path(tmp) / "sample.wav"
+      audio_path.write_bytes(b"RIFF")
+      request = ASRSubmitRequest(
+        request_id="req-fw",
+        consumer_id="consumer-fw",
+        audio=ASRAudioFile(path=audio_path, format="wav"),
+        options=ASRRequestOptions(
+          asr_backend="FASTER_WHISPER_DIRECT",
+          chunk_length=4,
+          vad_filter=False,
+          vad_parameters={"threshold": 0.4, "min_silence_duration_ms": 120},
+          word_timestamps=True,
+          max_new_tokens=64,
+          hotwords="omniscripta realtime",
+          compression_ratio_threshold=2.1,
+          log_prob_threshold=-0.7,
+          no_speech_threshold=0.5,
+          language_detection_threshold=0.6,
+          language_detection_segments=2,
+        ),
+        outputs=ASROutputSelection(text=True, segments=True, srt=False, srt_inline=False),
+      )
+
+      payload, _resolved_audio = _codec.build_submit_request_payload(request)
+
+      self.assertEqual(
+        payload["outputs"],
+        {"text": True, "segments": True, "srt": False, "srt_inline": False},
+      )
+      self.assertEqual(
+        payload["options"],
+        {
+          "asr_backend": "faster_whisper_direct",
+          "chunk_length": 4,
+          "vad_filter": False,
+          "vad_parameters": {"threshold": 0.4, "min_silence_duration_ms": 120},
+          "word_timestamps": True,
+          "max_new_tokens": 64,
+          "hotwords": "omniscripta realtime",
+          "compression_ratio_threshold": 2.1,
+          "log_prob_threshold": -0.7,
+          "no_speech_threshold": 0.5,
+          "language_detection_threshold": 0.6,
+          "language_detection_segments": 2,
+        },
+      )
+
 
 if __name__ == "__main__":
   unittest.main()

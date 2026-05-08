@@ -127,6 +127,32 @@ def build_submit_request_payload(request: ASRSubmitRequest) -> tuple[dict[str, A
     asr_backend = _clean_text(request.options.asr_backend).lower()
     if asr_backend:
       options["asr_backend"] = asr_backend
+  if request.options.chunk_length is not None:
+    options["chunk_length"] = int(max(1, int(request.options.chunk_length)))
+  if request.options.vad_filter is not None:
+    options["vad_filter"] = bool(request.options.vad_filter)
+  if request.options.vad_parameters is not None:
+    vad_parameters = dict(request.options.vad_parameters or {})
+    if vad_parameters:
+      options["vad_parameters"] = vad_parameters
+  if request.options.word_timestamps is not None:
+    options["word_timestamps"] = bool(request.options.word_timestamps)
+  if request.options.max_new_tokens is not None:
+    options["max_new_tokens"] = int(max(1, int(request.options.max_new_tokens)))
+  if request.options.hotwords is not None:
+    hotwords = _clean_text(request.options.hotwords)
+    if hotwords:
+      options["hotwords"] = hotwords
+  if request.options.compression_ratio_threshold is not None:
+    options["compression_ratio_threshold"] = float(request.options.compression_ratio_threshold)
+  if request.options.log_prob_threshold is not None:
+    options["log_prob_threshold"] = float(request.options.log_prob_threshold)
+  if request.options.no_speech_threshold is not None:
+    options["no_speech_threshold"] = float(request.options.no_speech_threshold)
+  if request.options.language_detection_threshold is not None:
+    options["language_detection_threshold"] = float(request.options.language_detection_threshold)
+  if request.options.language_detection_segments is not None:
+    options["language_detection_segments"] = int(max(1, int(request.options.language_detection_segments)))
   if options:
     payload["options"] = options
 

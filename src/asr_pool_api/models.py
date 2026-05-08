@@ -69,6 +69,17 @@ class ASRRequestOptions:
   beam_size: int | None = None
   chunk_size: int | None = None
   asr_backend: str | None = None
+  chunk_length: int | None = None
+  vad_filter: bool | None = None
+  vad_parameters: dict[str, Any] | None = None
+  word_timestamps: bool | None = None
+  max_new_tokens: int | None = None
+  hotwords: str | None = None
+  compression_ratio_threshold: float | None = None
+  log_prob_threshold: float | None = None
+  no_speech_threshold: float | None = None
+  language_detection_threshold: float | None = None
+  language_detection_segments: int | None = None
 
 
 @dataclass(frozen=True)
